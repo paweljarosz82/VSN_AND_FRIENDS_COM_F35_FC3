@@ -1,0 +1,10 @@
+
+
+Argument 25:
+
+arument 0 auf 0 auf 0 = türen öffmnen argument 26
+
+arument 0 auf < 0 = Haken argument 25
+
+
+
