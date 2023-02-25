@@ -103,6 +103,8 @@ FlightModel::FlightModel
 	//---------------Misc-------------------------------------
 	// --------------FCS-------------------------------------
 	FCSPitch(DAT_FCS_Pitch, CON_FCS_Pitch_Min, CON_FCS_Pitch_Max),
+	CmaMulti(DAT_CmaMulti, CON_CmaMultiMin, CON_CmaMultiMax),
+	CmqMulti(DAT_CmqMulti, CON_CmaMultiMin, CON_CmaMultiMax),
 	//--------------PitchUP and Stall------------------------
 	PitAoA(DAT_PitchAoA, CON_PitAoAMin, CON_PitAoAMax),
 	PitMult(DAT_PitchMult, CON_PitMulMin, CON_PitMulMax),
@@ -265,6 +267,9 @@ void FlightModel::zeroInit()
 	m_yawStabBoost = 0.0;
 	m_rollBoost = 0.0;
 	m_stickKicker = 0.0;
+	m_cmaMultiFBW = 0.0;
+	m_cmqMultiFBW = 0.0;
+	
 }
 
 void FlightModel::coldInit()
@@ -396,8 +401,8 @@ void FlightModel::M_stab()
 	//Für crisper-feel on Elevator * 1.21 vor -Cmde eingefügt
 	//CmFlap als Negativer-Pitch-Wert für Flap-Pitch eingeführt
 	//----------------NEUE Version mit Ausschlagsbeschränkung auf max Ausschlag Backstick--------------Cm bleibt unberhürt von der Rotation-----------------------------------------------------------------------------------
-	m_moment.z += m_k * CON_mac * ((((1.35 * CmalphaNEW(m_state.m_mach)) * m_inducedPitZ) * m_corrAoA) + (1.35 * -CmdeNEW(m_state.m_mach) * (((((m_input.getPitch() * m_elevDeflection)) + m_input.getTrimmUp() - m_input.getTrimmDown() + m_airframe.getAutoPilotAltH() + m_autoPilot.getAutoPitch()) * m_pitchReduceAoA) + m_stickKicker) * m_hStabDamage) + (0.70 * CmFlap(m_state.m_mach) * m_airframe.getFlapsPosition()))
-		+ 0.25 * m_state.m_airDensity * m_scalarVelocity * CON_A * CON_mac * CON_mac * (((1.00 * Cmq(m_state.m_mach) + m_CmqStAg) * m_state.m_omega.z) + (((1.00 * CmadotNEW(m_state.m_mach)) + m_CmaDOTStAg ) * m_aoaDot)) + m_pitchHoverThrust;
+	m_moment.z += m_k * CON_mac * ((((1.35 * CmalphaNEW(m_state.m_mach) * m_cmaMultiFBW) * m_inducedPitZ) * m_corrAoA) + (1.35 * -CmdeNEW(m_state.m_mach) * (((((m_input.getPitch() * m_elevDeflection)) + m_input.getTrimmUp() - m_input.getTrimmDown() + m_airframe.getAutoPilotAltH() + m_autoPilot.getAutoPitch() + m_autoPilot.getFBWPitch()) * m_pitchReduceAoA) + m_stickKicker) * m_hStabDamage) + (0.70 * CmFlap(m_state.m_mach) * m_airframe.getFlapsPosition()))
+		+ 0.25 * m_state.m_airDensity * m_scalarVelocity * CON_A * CON_mac * CON_mac * (((1.00 * (Cmq(m_state.m_mach) * m_cmqMultiFBW) + (m_cmqMultiFBW * m_CmqStAg)) * m_state.m_omega.z) + (((1.00 * (m_cmqMultiFBW * CmadotNEW(m_state.m_mach))) + (m_cmqMultiFBW * m_CmaDOTStAg)) * m_aoaDot)) + m_pitchHoverThrust;
 
 	
 }
@@ -457,7 +462,7 @@ void FlightModel::drag()
 	//jetzt wieder 1.0 vor CDa, da aufgrund der Rotation der Drag anders "angreift"
 	//abs vor m_corrAoA eingefügt, weil sonst der Wert bei negativem AoA mit CDa auf einmal negativ ist und dann Schub bedeutet.
 	//von (1.15 * (CDmin(m_state.m_mach)) + (0.95 * (CDa(m_state.m_mach) -> (0.95 * (CDmin(m_state.m_mach)) + (1.25 * (CDa(m_state.m_mach)
-	m_force.x += -m_k * (0.95 * (CDmin(m_state.m_mach)) + (1.25 * (CDa(m_state.m_mach) * abs(m_corrAoA))) + (CDeng(m_state.m_mach)) + CDGear + CDFlaps + CDBrk + CD_OverMach + m_cdminADD + CD_brFlap + m_stallIndDrag); // +CDwave + CDi); CDwave und CDi wieder dazu, wenn DRAG geklärt.
+	m_force.x += -m_k * ((CDmin(m_state.m_mach)) + ((CDa(m_state.m_mach) * abs(m_corrAoA))) + (CDeng(m_state.m_mach)) + CDGear + CDFlaps + CDBrk + CD_OverMach + m_cdminADD + CD_brFlap + m_stallIndDrag); // +CDwave + CDi); CDwave und CDi wieder dazu, wenn DRAG geklärt.
 }
 
 void FlightModel::sideForce()
@@ -1177,6 +1182,7 @@ void FlightModel::hoverThrustFunction()
 
 void FlightModel::flightControlSystem()
 {
+	//-------------AoA-Liniter Functions------------------------------------------------------------------------------
 	double allowableAOA = 0.0;
 	double allowableAoAPercent = 0.0;
 
@@ -1198,8 +1204,10 @@ void FlightModel::flightControlSystem()
 	{
 		m_pitchReduceAoA = 1.0;
 	}
+	//------------------------------------------------------------------------------------------------
+	//----------------added "Stick-Kicker" Function to apply "front-stick" input when neccessary------
 
-	if ((allowableAoAPercent >= 0.95) && (m_input.getPitch() <= 0.0))
+	if ((allowableAoAPercent >= 0.95) && (m_input.getPitch() >= 0.0))
 	{
 		m_stickKicker = -0.25;//ganz blöder stick-Kicker wird noch mit einer Table besser gemacht :-)
 	}
@@ -1207,6 +1215,31 @@ void FlightModel::flightControlSystem()
 	{
 		m_stickKicker = 0.0;
 	}
+	//-------------------------------------------------------------------------------------------------
+	//-----------------------"distubed"-FBW-System by changing physics...why not the other way around?--
+	//----------Cma change function to have just very few Cma at 0.0 input, and normal Cma at full input
+	//----------Cmq change function to have more dampening at around 0.0 input--------------------------
+	
+	
+	if ((m_airframe.getACpower() == 1.0) || (m_airframe.getDCpower() == 1.0) || (m_airframe.getBATpower() == 1.0))
+	{
+		//m_cmaMultiFBW = CmaMulti(m_input.getPitch());
+		//m_cmqMultiFBW = CmqMulti(m_input.getPitch());
+		
+		//zum PID-Testen--
+		m_cmaMultiFBW = 1.0;
+		m_cmqMultiFBW = 1.0;
+		//-----------------
+	}
+	else
+	{
+		m_cmaMultiFBW = 1.0;
+		m_cmqMultiFBW = 1.0;
+	}
+
+	
+
+	//----------------------------------------------------------------------------------------------------------------
 
 }
 
@@ -1552,9 +1585,16 @@ void FlightModel::calculateShake(double& dt)
 
 	// 20 - 28
 	double aoa = toDegrees(std::abs(m_state.m_aoa));
+	double maxAoA = toDegrees(abs(CLzero(m_state.m_mach)));
+
 	if (m_state.m_mach > 0.15)
-		shakeAmplitude = clamp((aoa - 10.0) / 19.0, 0.0, 1.0);//hier wird der Shaker für AoA gesetzt. Von 15.0 auf 18.0 auf 17.0
-	
+	{
+		//--Alte Formulierung die den MAX-Shaker bei 27° AOA setzte und shaker-Off bei 10°
+		//shakeAmplitude = clamp((aoa - 10.0) / 17.0, 0.0, 1.0);//hier wird der Shaker für AoA gesetzt. Von 15.0 auf 18.0 auf 17.0
+		//---Neue Formel, die den Shaker an dem Wert aus aktuellem AoA und max-AoA für die jeweilige Geschwindigkeit setzt.
+		shakeAmplitude = clamp(((aoa / maxAoA) - 0.20) / 0.80, 0.0, 1.0);
+	}
+
 	shakeAmplitude *= buffetAmplitude;
 
 	// GEAR CONTRIBUTION

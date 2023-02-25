@@ -23,6 +23,9 @@ void AutoPilot::zeroInit()
 	m_desiredAlt = 0.0;
 	m_desiredAngleMax = 0.0;
 	m_desiredAngleMin = 0.0;
+	m_FBW_desiredAngle = 0.0;
+	m_FBW_desiredAngleMax = 0.0;
+	m_FBW_desiredAngleMin = 0.0;
 
 	m_attAPengaged = false;
 	m_altAPengaged = false;
@@ -34,6 +37,17 @@ void AutoPilot::zeroInit()
 	m_autoPilotAngle = 0.0;
 
 	m_verticalControlEngaged = 0.0;
+
+	m_fbwEngaged = false;
+
+	m_autoFBWPitch = 0.0;
+
+	m_FBW_pitchUpMax = 0.0;
+	m_FBW_pitchDownMax = 0.0;
+
+	
+	m_FBW_desiredAngleMax = 0.0;
+	m_FBW_desiredAngleMin = 0.0;
 
 }
 
@@ -67,6 +81,7 @@ void AutoPilot::AutoPilotUpdate(double dt)
 	VerticalAngleControl(dt);
 	AltitudeControl(dt);
 	RollControl();
+	flyByWire(dt);
 
 }
 
@@ -190,8 +205,8 @@ void AutoPilot::AltitudeControl(double dt)
 		m_pid.p_ALT_limMax = desiredMaxPositiveAngle;
 		m_pid.p_ALT_limMin = desiredMaxNegativeAngle;
 		m_pid.p_ALT_Kp = 0.0025; //protportional gain//0.5 -> 0.4 -> 0.3 -> 0.15 -> 0.10
-		m_pid.p_ALT_Ki = 0.0001; //integrational gain// 0.05 -> 0.07 -> 0.10
-		m_pid.p_ALT_Kd = 0.0005; //differential gain//0.01 -> 0.15 -> 0.25 -> 0.45
+		m_pid.p_ALT_Ki = 0.0000; //integrational gain// 0.05 -> 0.07 -> 0.10
+		m_pid.p_ALT_Kd = 0.0008; //differential gain//0.0005 -> 0.0008
 		m_pid.p_ALT_time = deltaTime;
 		m_pid.p_ALT_TAU = 0.55;// Wenn Tau näher an 1.0 -> starker Filter; Wenn TAU näher an 0.0 direkter Derivativer-Output 
 
@@ -242,4 +257,86 @@ void AutoPilot::AltitudeControl(double dt)
 void AutoPilot::RollControl()
 {
 
+}
+
+void AutoPilot::flyByWire(double dt)
+{
+	double ActualAngle = 0.0;
+	//double desiredMaxPositiveAngle = 0.0;
+	//double desiredMaxNegativeAngle = 0.0;
+	double desiredMaxPositivePitch = 0.0;
+	double desiredMaxNegativePitch = 0.0;
+	double deltaTime = 0.0;
+
+	deltaTime = dt;
+
+	//desiredMaxNegativeAngle = -0.261799; // -> -15°
+	//desiredMaxPositiveAngle = 0.261799; // -> +15°
+
+	desiredMaxPositivePitch = 0.5; //50% of positive MaxPitch
+	desiredMaxNegativePitch = -0.5; //50% of negative MaxPitch
+
+
+	ActualAngle = m_state.m_angle.z;
+
+
+	//to store actual-angle in desired angle as long as FBW-Hold AP is engaged
+	if ((m_input.getElectricSystem() == 1.0) && (m_fbwEngaged == false) &&  ((m_state.m_localAcceleration.y >= -6.00) && (m_state.m_localAcceleration.y <= 18.00)) && (m_input.getPitch() == 0.0))
+	{
+		m_FBW_desiredAngle = ActualAngle;
+		m_fbwEngaged = true;
+
+		/*if (m_verticalControlEngaged == 1.0)
+		{
+			m_desiredAngle = m_autoPilotAngle;
+		}
+		*/
+	}
+	else if ((m_input.getElectricSystem() == 1.0)  && (m_fbwEngaged == true) && (m_input.getPitch() == 0.0))
+	{
+		//just don't touch those two variable and chill
+		//m_desiredAngle = 0.0;
+		//m_attAPengaged = false;
+		/*
+		if (m_verticalControlEngaged == 1.0)
+		{
+			m_desiredAngle = m_autoPilotAngle;
+		}
+		*/
+
+		m_pid.p_FBW_limMax = desiredMaxPositivePitch;
+		m_pid.p_FBW_limMin = desiredMaxNegativePitch;
+		m_pid.p_FBW_Kp = 1.0; //protportional gain
+		m_pid.p_FBW_Ki = 0.00; //integrational gain
+		m_pid.p_FBW_Kd = 0.05; //differential gain von 0.03 -> 0.05
+		m_pid.p_FBW_time = deltaTime;
+		m_pid.p_FBW_TAU = 0.55;// Wenn Tau näher an 1.0 -> starker Filter; Wenn TAU näher an 0.0 direkter Derivativer-Output 
+
+		m_autoFBWPitch = m_pid.fbwPIDControl(m_FBW_desiredAngle, ActualAngle);
+
+	}
+	else if ((m_input.getElectricSystem() == 1.0) && (m_fbwEngaged == true) && (m_input.getPitch() != 0.0))
+	{
+		m_FBW_desiredAngle = 0.0;
+		m_fbwEngaged = false;
+
+		m_pid.p_FBW_limMax = 0.0;
+		m_pid.p_FBW_limMin = 0.0;
+		m_pid.p_FBW_Kp = 0.0; //protportional gain
+		m_pid.p_FBW_Ki = 0.00; //integrational gain
+		m_pid.p_FBW_Kd = 0.00; //differential gain
+		m_pid.p_FBW_time = 0.0;
+		m_pid.p_FBW_TAU = 0.0;// Wenn Tau näher an 1.0 -> starker Filter; Wenn TAU näher an 0.0 direkter Derivativer-Output
+
+		m_autoFBWPitch = 0.0;
+	}
+	/*else
+	{
+		m_desiredAngle = 0.0;
+		m_attAPengaged = false;
+		m_autoPilotPitch = 0.0;
+	}
+	*/
+
+	//printf("Actual Acceleration Y %f\n", m_state.m_localAcceleration.y);
 }

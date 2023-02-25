@@ -47,6 +47,27 @@ void PID::zeroInit()
 	p_ALT_proportional = 0.0;
 
 	p_ALT_output = 0.0;
+
+	//------FBW Controller Variables init
+	p_FBW_Kp = 0.0; //Present -> Proportional
+	p_FBW_Ki = 0.0; //Past -> Integral
+	p_FBW_Kd = 0.0; //Future -> Derivative
+	
+	p_FBW_TAU = 0.0;
+
+	p_FBW_limMin = 0.0;
+	p_FBW_limMax = 0.0;
+
+	p_FBW_time = 0.0;
+
+	p_FBW_integrator = 0.0;
+	p_FBW_error = 0.0;
+	p_FBW_prevError = 0.0;
+	p_FBW_prevMeasurement = 0.0;
+	p_FBW_differentiator = 0.0;
+	p_FBW_proportional = 0.0;
+
+	p_FBW_output = 0.0;
 }
 
 void PID::coldInit()
@@ -72,10 +93,10 @@ double PID::attitudePIDControl(double setpoint, double measurement)
 	double limMinInt = 0.0;
 	double limMaxInt = 0.0;
 
-	
+
 	double Target = setpoint;
 	double Start = measurement;
-	
+
 	//computing the error signal
 	p_error = Target - Start;
 
@@ -86,7 +107,7 @@ double PID::attitudePIDControl(double setpoint, double measurement)
 	p_integrator = p_integrator + 0.5 * p_Ki * p_time * (p_error + p_prevError);
 
 	//Dampening for integral part
-	
+
 	if (p_limMax > p_proportional)
 	{
 		limMaxInt = p_limMax - p_proportional;
@@ -208,4 +229,79 @@ double PID::altitudePIDControl(double setpoint, double measurement)
 
 	// return what should happen
 	return p_ALT_output;
+}
+
+double PID::fbwPIDControl(double setpoint, double measurement)
+{
+
+	//double Target = 0.0;
+	//double Start = 0.0;
+	double limMinInt = 0.0;
+	double limMaxInt = 0.0;
+
+
+	double Target = setpoint;
+	double Start = measurement;
+
+	//computing the error signal
+	p_FBW_error = Target - Start;
+
+	//proportional part -> Present
+	p_FBW_proportional = p_FBW_Kp * p_FBW_error;
+
+	//integral part -> past
+	p_FBW_integrator = p_FBW_integrator + 0.5 * p_FBW_Ki * p_FBW_time * (p_FBW_error + p_FBW_prevError);
+
+	//Dampening for integral part
+
+	if (p_FBW_limMax > p_FBW_proportional)
+	{
+		limMaxInt = p_FBW_limMax - p_FBW_proportional;
+	}
+	else
+	{
+		limMaxInt = 0.0;
+	}
+
+	if (p_FBW_limMin < p_FBW_proportional)
+	{
+		limMinInt = p_FBW_limMin - p_FBW_proportional;
+	}
+	else
+	{
+		limMinInt = 0.0;
+	}
+
+	//Clamp the integrator
+	if (p_FBW_integrator > limMaxInt)
+	{
+		p_FBW_integrator = limMaxInt;
+	}
+	else if (p_FBW_integrator < limMinInt)
+	{
+		p_FBW_integrator = limMinInt;
+	}
+
+	//Derivative -> future (band-limited differentiator)
+	p_FBW_differentiator = (2.0 * p_FBW_Kd * (Start - p_FBW_prevMeasurement) + (2.0 * p_FBW_TAU - p_FBW_time) * p_FBW_differentiator) / (2.0 * p_FBW_TAU + p_FBW_time);
+
+	//compute output and enjoy
+	p_FBW_output = p_FBW_proportional + p_FBW_integrator + p_FBW_differentiator;
+
+	//limitation on controller output
+	if (p_FBW_output > p_FBW_limMax)
+	{
+		p_FBW_output = p_FBW_limMax;
+	}
+	else if (p_FBW_output < p_FBW_limMin)
+	{
+		p_FBW_output = p_FBW_limMin;
+	}
+	//store error and measurement for next frame
+	p_FBW_prevError = p_FBW_error;
+	p_FBW_prevMeasurement = Start;
+
+	// return what should happen
+	return p_FBW_output;
+
 }

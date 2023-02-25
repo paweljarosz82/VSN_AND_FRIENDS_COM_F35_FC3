@@ -128,6 +128,9 @@ private:
 	double m_yawStabBoost = 0.0;
 	double m_rollBoost = 0.0;
 	double m_stickKicker = 0.0;
+	double m_cmaMultiFBW = 0.0;
+	double m_cmqMultiFBW = 0.0;
+	
 	
 	//---------Stability-augmentation-System--------------------------
 	
@@ -324,6 +327,8 @@ private:
 	//------------Misc---------------------------
 	//------------FCS---------------------------
 	Table FCSPitch;
+	Table CmaMulti;
+	Table CmqMulti;
 	//------------PitchUp and Stall-------------
 	Table PitAoA;
 	Table PitMult;
