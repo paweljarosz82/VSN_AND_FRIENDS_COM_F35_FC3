@@ -304,18 +304,91 @@ void AutoPilot::flyByWire(double dt)
 		}
 		*/
 
-		m_pid.p_FBW_limMax = desiredMaxPositivePitch;
-		m_pid.p_FBW_limMin = desiredMaxNegativePitch;
-		m_pid.p_FBW_Kp = 1.0; //protportional gain
-		m_pid.p_FBW_Ki = 0.00; //integrational gain
-		m_pid.p_FBW_Kd = 0.05; //differential gain von 0.03 -> 0.05
-		m_pid.p_FBW_time = deltaTime;
-		m_pid.p_FBW_TAU = 0.55;// Wenn Tau näher an 1.0 -> starker Filter; Wenn TAU näher an 0.0 direkter Derivativer-Output 
+		bool upright_1QT = false;
+		bool upsideDown_2QT = false;
+		bool upsideDown_3QT = false;
+		bool upright_4QT = false;
 
-		m_autoFBWPitch = m_pid.fbwPIDControl(m_FBW_desiredAngle, ActualAngle);
+		if ((m_state.m_angle.z >= 0.0) && (((toDegrees(m_state.m_angle.x)) >= -90.0) && ((toDegrees(m_state.m_angle.x)) <= 90.0)))
+		{
+			upright_1QT = true;
+			upsideDown_2QT = false;
+			upsideDown_3QT = false;
+			upright_4QT = false;
 
+		}
+		else if ((m_state.m_angle.z >= 0.0) && ((((toDegrees(m_state.m_angle.x)) >= 90.0) && ((toDegrees(m_state.m_angle.x)) <= 180.0)) || (((toDegrees(m_state.m_angle.x)) >= -180.0) && ((toDegrees(m_state.m_angle.x)) <= -90.0))))
+		{
+			upright_1QT = false;
+			upsideDown_2QT = true;
+			upsideDown_3QT = false;
+			upright_4QT = false;
+		}
+		else if ((m_state.m_angle.z < 0.0) && ((((toDegrees(m_state.m_angle.x)) >= 90.0) && ((toDegrees(m_state.m_angle.x)) <= 180.0)) || (((toDegrees(m_state.m_angle.x)) >= -180.0) && ((toDegrees(m_state.m_angle.x)) <= -90.0))))
+		{
+			upright_1QT = false;
+			upsideDown_2QT = false;
+			upsideDown_3QT = true;
+			upright_4QT = false;
+		}
+		else if ((m_state.m_angle.z < 0.0) && (((toDegrees(m_state.m_angle.x)) >= -90.0) && ((toDegrees(m_state.m_angle.x)) <= 90.0)))
+		{
+			upright_1QT = false;
+			upsideDown_2QT = false;
+			upsideDown_3QT = false;
+			upright_4QT = true;
+		}
+
+		if (upright_1QT == true)
+		{
+			m_pid.p_FBW_limMax = desiredMaxPositivePitch;
+			m_pid.p_FBW_limMin = desiredMaxNegativePitch;
+			m_pid.p_FBW_Kp = 1.0; //protportional gain
+			m_pid.p_FBW_Ki = 0.00; //integrational gain
+			m_pid.p_FBW_Kd = 0.15; //differential gain von 0.03 -> 0.05 -> 0.07 -> 0.1
+			m_pid.p_FBW_time = deltaTime;
+			m_pid.p_FBW_TAU = 0.55;// Wenn Tau näher an 1.0 -> starker Filter; Wenn TAU näher an 0.0 direkter Derivativer-Output 
+
+			m_autoFBWPitch = m_pid.fbwPIDControl(m_FBW_desiredAngle, ActualAngle);
+		}
+		else if (upsideDown_2QT == true)
+		{
+			m_pid.p_FBW_limMax = desiredMaxPositivePitch;
+			m_pid.p_FBW_limMin = desiredMaxNegativePitch;
+			m_pid.p_FBW_Kp = 1.0; //protportional gain
+			m_pid.p_FBW_Ki = 0.00; //integrational gain
+			m_pid.p_FBW_Kd = 0.15; //differential gain von 0.03 -> 0.05 -> 0.7
+			m_pid.p_FBW_time = deltaTime;
+			m_pid.p_FBW_TAU = 0.55;// Wenn Tau näher an 1.0 -> starker Filter; Wenn TAU näher an 0.0 direkter Derivativer-Output 
+
+			m_autoFBWPitch = m_pid.fbwPIDControl(-m_FBW_desiredAngle, -ActualAngle);
+		}
+		else if (upsideDown_3QT == true)
+		{
+			m_pid.p_FBW_limMax = desiredMaxPositivePitch;
+			m_pid.p_FBW_limMin = desiredMaxNegativePitch;
+			m_pid.p_FBW_Kp = 1.0; //protportional gain
+			m_pid.p_FBW_Ki = 0.00; //integrational gain
+			m_pid.p_FBW_Kd = 0.15; //differential gain von 0.03 -> 0.05 -> 0.7
+			m_pid.p_FBW_time = deltaTime;
+			m_pid.p_FBW_TAU = 0.55;// Wenn Tau näher an 1.0 -> starker Filter; Wenn TAU näher an 0.0 direkter Derivativer-Output 
+
+			m_autoFBWPitch = m_pid.fbwPIDControl(-m_FBW_desiredAngle, -ActualAngle);
+		}
+		else if (upright_4QT == true)
+		{
+			m_pid.p_FBW_limMax = desiredMaxPositivePitch;
+			m_pid.p_FBW_limMin = desiredMaxNegativePitch;
+			m_pid.p_FBW_Kp = 1.0; //protportional gain
+			m_pid.p_FBW_Ki = 0.00; //integrational gain
+			m_pid.p_FBW_Kd = 0.15; //differential gain von 0.03 -> 0.05 -> 0.7
+			m_pid.p_FBW_time = deltaTime;
+			m_pid.p_FBW_TAU = 0.55;// Wenn Tau näher an 1.0 -> starker Filter; Wenn TAU näher an 0.0 direkter Derivativer-Output 
+
+			m_autoFBWPitch = m_pid.fbwPIDControl(m_FBW_desiredAngle, ActualAngle);
+		}
 	}
-	else if ((m_input.getElectricSystem() == 1.0) && (m_fbwEngaged == true) && (m_input.getPitch() != 0.0))
+	else if ((m_input.getElectricSystem() == 1.0) && (m_fbwEngaged == true) && ((m_input.getPitch() != 0.0) || (m_input.getRoll() != 0.0)))
 	{
 		m_FBW_desiredAngle = 0.0;
 		m_fbwEngaged = false;

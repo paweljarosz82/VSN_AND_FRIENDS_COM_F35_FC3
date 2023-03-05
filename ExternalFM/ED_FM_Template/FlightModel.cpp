@@ -519,6 +519,9 @@ void FlightModel::calcAeroDeflection()
 		m_elevDeflection = m_input.getPitch() * CON_hstdDN;
 	}
 
+	printf("M-State.M-Angle.Z in deg: %f\n", toDegrees(m_state.m_angle.z));
+	printf("M-State.M-Angle.X in deg: %f\n", toDegrees(m_state.m_angle.x));
+
 }
 
 void FlightModel::calcLiftFlaps()
